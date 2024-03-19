@@ -57,10 +57,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.plcoding.cameraxguide.ui.theme.CameraXGuideTheme
 import kotlinx.coroutines.launch
 import java.io.File
+import android.media.MediaPlayer
+import java.io.IOException
 
-class MainActivity : ComponentActivity() {
+class
+
+
+MainActivity : ComponentActivity() {
 
     private var recording: Recording? = null
+    private var mediaPlayer: MediaPlayer? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -210,14 +216,15 @@ class MainActivity : ComponentActivity() {
     }
 
     @SuppressLint("MissingPermission")
+
     private fun recordVideo(controller: LifecycleCameraController) {
-        if(recording != null) {
+        if (recording != null) {
             recording?.stop()
             recording = null
             return
         }
 
-        if(!hasRequiredPermissions()) {
+        if (!hasRequiredPermissions()) {
             return
         }
 
@@ -227,9 +234,9 @@ class MainActivity : ComponentActivity() {
             AudioConfig.create(true),
             ContextCompat.getMainExecutor(applicationContext),
         ) { event ->
-            when(event) {
+            when (event) {
                 is VideoRecordEvent.Finalize -> {
-                    if(event.hasError()) {
+                    if (event.hasError()) {
                         recording?.close()
                         recording = null
 
@@ -244,10 +251,36 @@ class MainActivity : ComponentActivity() {
                             "Video capture succeeded",
                             Toast.LENGTH_LONG
                         ).show()
+                        // Play the recorded video
+                        playVideo(outputFile)
                     }
                 }
             }
         }
+    }
+
+    private fun playVideo(videoFile: File) {
+        mediaPlayer = MediaPlayer().apply {
+            try {
+                setDataSource(videoFile.absolutePath)
+                prepare()
+                start()
+            } catch (e: IOException) {
+                e.printStackTrace()
+                Toast.makeText(
+                    applicationContext,
+                    "Failed to play video",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Release MediaPlayer resources when the activity is stopped
+        mediaPlayer?.release()
+        mediaPlayer = null
     }
 
     private fun hasRequiredPermissions(): Boolean {
