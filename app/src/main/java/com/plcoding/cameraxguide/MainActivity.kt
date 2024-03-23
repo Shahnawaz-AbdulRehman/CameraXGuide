@@ -260,7 +260,7 @@ MainActivity : ComponentActivity() {
                         // Slow down the video by decreasing the FPS
                         val ffmpegCommand = arrayOf(
                             "-i", tempFile.absolutePath,
-                            "-vf", "tblend=all_mode=average",
+                            "-vf", "fps=15", // Set the desired FPS (e.g., 15 frames per second)
                             "-preset", "ultrafast",
                             outputFile.absolutePath
                         )
