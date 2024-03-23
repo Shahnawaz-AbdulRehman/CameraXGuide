@@ -38,18 +38,13 @@ import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.rememberBottomSheetScaffoldState
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -59,7 +54,19 @@ import kotlinx.coroutines.launch
 import java.io.File
 import android.media.MediaPlayer
 import java.io.IOException
-
+import android.os.Environment
+import android.media.MediaScannerConnection
+import java.text.SimpleDateFormat
+import java.util.*
+import com.arthenica.mobileffmpeg.Config
+import com.arthenica.mobileffmpeg.ExecuteCallback
+import com.arthenica.mobileffmpeg.FFmpeg
+import com.coremedia.iso.boxes.Container;
+import com.googlecode.mp4parser.authoring.Movie;
+import com.googlecode.mp4parser.authoring.Track;
+import com.googlecode.mp4parser.authoring.builder.DefaultMp4Builder;
+import com.googlecode.mp4parser.authoring.container.mp4.MovieCreator;
+import com.googlecode.mp4parser.authoring.tracks.ChangeTimeScaleTrack;
 class
 
 
@@ -228,9 +235,13 @@ MainActivity : ComponentActivity() {
             return
         }
 
-        val outputFile = File(filesDir, "my-recording.mp4")
+        val outputDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val outputFile = File(outputDir, "recording_$timestamp.mp4")
+        val tempFile = File.createTempFile("temp_", ".mp4", outputDir)
+
         recording = controller.startRecording(
-            FileOutputOptions.Builder(outputFile).build(),
+            FileOutputOptions.Builder(tempFile).build(),
             AudioConfig.create(true),
             ContextCompat.getMainExecutor(applicationContext),
         ) { event ->
@@ -246,18 +257,51 @@ MainActivity : ComponentActivity() {
                             Toast.LENGTH_LONG
                         ).show()
                     } else {
-                        Toast.makeText(
-                            applicationContext,
-                            "Video capture succeeded",
-                            Toast.LENGTH_LONG
-                        ).show()
-                        // Play the recorded video
-                        playVideo(outputFile)
+                        // Slow down the video by decreasing the FPS
+                        val ffmpegCommand = arrayOf(
+                            "-i", tempFile.absolutePath,
+                            "-vf", "tblend=all_mode=average",
+                            "-preset", "ultrafast",
+                            outputFile.absolutePath
+                        )
+
+
+
+
+                        FFmpeg.executeAsync(ffmpegCommand, object : ExecuteCallback {
+                            override fun apply(executionId: Long, returnCode: Int) {
+                                if (returnCode == Config.RETURN_CODE_SUCCESS) {
+                                    // Add the video to MediaStore to make it visible in the gallery
+                                    MediaScannerConnection.scanFile(
+                                        applicationContext,
+                                        arrayOf(outputFile.toString()),
+                                        null,
+                                        null
+                                    )
+
+                                    Toast.makeText(
+                                        applicationContext,
+                                        "Video capture succeeded",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    // Play the recorded video
+                                    playVideo(outputFile)
+                                } else {
+                                    Log.e("FFmpeg", "Failed to speed up video: $returnCode")
+                                    Toast.makeText(
+                                        applicationContext,
+                                        "Failed to speed up video",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        })
                     }
                 }
             }
         }
     }
+
 
     private fun playVideo(videoFile: File) {
         mediaPlayer = MediaPlayer().apply {
