@@ -61,12 +61,8 @@ import java.util.*
 import com.arthenica.mobileffmpeg.Config
 import com.arthenica.mobileffmpeg.ExecuteCallback
 import com.arthenica.mobileffmpeg.FFmpeg
-import com.coremedia.iso.boxes.Container;
-import com.googlecode.mp4parser.authoring.Movie;
-import com.googlecode.mp4parser.authoring.Track;
-import com.googlecode.mp4parser.authoring.builder.DefaultMp4Builder;
-import com.googlecode.mp4parser.authoring.container.mp4.MovieCreator;
-import com.googlecode.mp4parser.authoring.tracks.ChangeTimeScaleTrack;
+import android.media.MediaMetadataRetriever
+
 class
 
 
@@ -257,51 +253,76 @@ MainActivity : ComponentActivity() {
                             Toast.LENGTH_LONG
                         ).show()
                     } else {
-                        // Slow down the video by decreasing the FPS
-                        val ffmpegCommand = arrayOf(
-                            "-i", tempFile.absolutePath,
-                            "-vf", "fps=15", // Set the desired FPS (e.g., 15 frames per second)
-                            "-preset", "ultrafast",
-                            outputFile.absolutePath
-                        )
+                        // Get the duration of the original video
+                        val originalDuration = getVideoDuration(tempFile)
+                        if (originalDuration > 0) {
+                            // Calculate the duration for the slow-motion video (e.g., double the duration)
+                            val slowMotionDuration = originalDuration * 1/4
+                            val durationString = formatDuration(slowMotionDuration)
 
+                            val ffmpegCommand = arrayOf(
+                                "-i", tempFile.absolutePath,
+                                "-vf", "setpts=0.25*PTS", // Slow down the video by doubling the duration of each frame
+                                "-t", durationString, // Specify the desired duration of the output video
+                                outputFile.absolutePath
+                            )
 
+                            FFmpeg.executeAsync(ffmpegCommand, object : ExecuteCallback {
+                                override fun apply(executionId: Long, returnCode: Int) {
+                                    if (returnCode == Config.RETURN_CODE_SUCCESS) {
+                                        // Add the video to MediaStore to make it visible in the gallery
+                                        MediaScannerConnection.scanFile(
+                                            applicationContext,
+                                            arrayOf(outputFile.toString()),
+                                            null,
+                                            null
+                                        )
 
-
-                        FFmpeg.executeAsync(ffmpegCommand, object : ExecuteCallback {
-                            override fun apply(executionId: Long, returnCode: Int) {
-                                if (returnCode == Config.RETURN_CODE_SUCCESS) {
-                                    // Add the video to MediaStore to make it visible in the gallery
-                                    MediaScannerConnection.scanFile(
-                                        applicationContext,
-                                        arrayOf(outputFile.toString()),
-                                        null,
-                                        null
-                                    )
-
-                                    Toast.makeText(
-                                        applicationContext,
-                                        "Video capture succeeded",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                    // Play the recorded video
-                                    playVideo(outputFile)
-                                } else {
-                                    Log.e("FFmpeg", "Failed to speed up video: $returnCode")
-                                    Toast.makeText(
-                                        applicationContext,
-                                        "Failed to speed up video",
-                                        Toast.LENGTH_LONG
-                                    ).show()
+                                        Toast.makeText(
+                                            applicationContext,
+                                            "Video capture succeeded",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        // Play the recorded video
+                                        playVideo(outputFile)
+                                    } else {
+                                        Log.e("FFmpeg", "Failed to speed up video: $returnCode")
+                                        Toast.makeText(
+                                            applicationContext,
+                                            "Failed to speed up video",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
                                 }
-                            }
-                        })
+                            })
+                        }
+
                     }
                 }
             }
         }
     }
+    private fun getVideoDuration(videoFile: File): Long {
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(videoFile.absolutePath)
+            val durationString = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            return durationString?.toLong() ?: 0
+        } catch (e: IOException) {
+            e.printStackTrace()
+        } finally {
+            retriever.release()
+        }
+        return 0
+    }
 
+    // Function to format duration from milliseconds to HH:MM:SS format
+    private fun formatDuration(durationMs: Long): String {
+        val hours = durationMs / (1000 * 60 * 60)
+        val minutes = (durationMs % (1000 * 60 * 60)) / (1000 * 60)
+        val seconds = (durationMs % (1000 * 60)) / 1000
+        return String.format("%02d:%02d:%02d", hours, minutes, seconds)
+    }
 
     private fun playVideo(videoFile: File) {
         mediaPlayer = MediaPlayer().apply {

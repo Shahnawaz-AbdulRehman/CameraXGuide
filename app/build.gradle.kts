@@ -69,6 +69,7 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     implementation("com.arthenica:mobile-ffmpeg-full:4.4.LTS")
     implementation ("com.googlecode.mp4parser:isoparser:1.1.22")
+    implementation ("com.arthenica:mobile-ffmpeg-full:4.4.LTS")
 
     val cameraxVersion = "1.3.0-rc01"
 
